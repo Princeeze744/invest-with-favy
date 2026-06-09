@@ -11,6 +11,7 @@ import Tips from "@/components/Tips";
 import Media from "@/components/Media";
 import Reviews from "@/components/Reviews";
 import Matchmaker from "@/components/Matchmaker";
+import SellList from "@/components/SellList";
 import Contact from "@/components/Contact";
 import Footer from "@/components/Footer";
 import WhatsAppFab from "@/components/WhatsAppFab";
@@ -31,6 +32,7 @@ export default function Home() {
         <Media />
         <Reviews />
         <Matchmaker />
+        <SellList />
         <Contact />
       </main>
       <Footer />

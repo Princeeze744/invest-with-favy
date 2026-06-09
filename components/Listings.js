@@ -1,11 +1,20 @@
 "use client";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 const WA = "https://wa.me/2349049299303";
+
+/* =========================================================
+   FAVOUR'S CONTROL PANEL
+   Paste the published Google Sheet CSV link between the quotes
+   below to manage listings yourself. Leave empty to use the
+   built-in list. (Setup guide is in the chat.)
+   ========================================================= */
+const SHEET_CSV_URL = "";
+
 const req = (name) => `${WA}?text=${encodeURIComponent(`Hi Favour! I would love more details about ${name}.`)}`;
 function Fallback() { return <div className="lm-fallback"><svg viewBox="0 0 24 24" fill="none" stroke="#c6a052" strokeWidth="1"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" /></svg></div>; }
-const L = [
+const base = [
   { name: "Casa Royale Estate", loc: "Eliozu / Eliogbolo, Port Harcourt", img: "/images/casa-royale.jpg", cat: "Land & Plots", badge: "Now Selling", price: "₦49.5M", priceLabel: "Initial deposit ₦24M", plan: [["3 months", "₦45M"], ["6 months", "₦48M"]], features: ["Tarred Road", "Perimeter Fence", "Electricity", "Solar Lights", "Security House", "Deed of Conveyance"] },
   { name: "Marble Crescent", loc: "Rukpokwu, Port Harcourt", img: "/images/marble.jpg", cat: "Land & Plots", badge: "Premium", price: "₦16M – ₦25M", priceLabel: "Prime 300sqm / Elite 500sqm", plan: [["Prime · 300sqm", "₦16M"], ["Elite · 500sqm", "₦25M"]], features: ["Survey", "Electricity", "Access Road", "Deed of Conveyance"] },
   { name: "Runyi Residence", loc: "Eneka, Igbo-Etche Road, Rivers State", img: "/images/runyi.jpg", cat: "Land & Plots", badge: "Top Pick", price: "₦8.5M – ₦10M", priceLabel: "Residential 465sqm / Commercial 500sqm", plan: [["Residential · 465sqm", "₦8.5M"], ["Commercial · 500sqm", "₦10M"]], features: ["Strategic Location", "Flexible Payment", "Good Road Access", "Fast Growing Area"] },
@@ -18,23 +27,48 @@ const L = [
   { name: "Amber View", loc: "NTA Road, Port Harcourt", img: "/images/amber.jpg", cat: "Homes & Duplexes", badge: "Mixed Units", price: "From ₦34.5M", priceLabel: "Studio · 4-bed · Duplex", plan: [["Studio apartment", "₦34.5M"], ["4 bedroom", "₦49.5M"], ["Duplex", "₦82.5M"]], features: ["Off-Plan"] },
 ];
 const cats = ["All", "Land & Plots", "Homes & Duplexes", "Apartments"];
+function parseCSV(text) {
+  const rows = []; let row = []; let cur = ""; let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else { if (c === '"') q = true; else if (c === ",") { row.push(cur); cur = ""; } else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; } else if (c === "\r") {} else cur += c; }
+  }
+  if (cur.length || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+function sheetToListings(text) {
+  const rows = parseCSV(text).filter((r) => r.length && r.some((c) => c.trim() !== ""));
+  if (rows.length < 2) return [];
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const idx = (n) => head.indexOf(n);
+  return rows.slice(1).map((r) => {
+    const g = (n) => { const i = idx(n); return i >= 0 ? (r[i] || "").trim() : ""; };
+    const feats = g("features") ? g("features").split(",").map((s) => s.trim()).filter(Boolean) : [];
+    return { name: g("name"), loc: g("location"), cat: g("category") || "Land & Plots", badge: g("badge") || "Available", price: g("price"), priceLabel: g("note"), plan: [], features: feats, img: g("image") || null };
+  }).filter((x) => x.name);
+}
 export default function Listings() {
   const [filter, setFilter] = useState("All");
-  const shown = filter === "All" ? L : L.filter((l) => l.cat === filter);
+  const [extra, setExtra] = useState([]);
+  useEffect(() => {
+    if (!SHEET_CSV_URL) return;
+    fetch(SHEET_CSV_URL).then((r) => r.text()).then((t) => setExtra(sheetToListings(t))).catch(() => {});
+  }, []);
+  const all = [...base, ...extra];
+  const shown = filter === "All" ? all : all.filter((l) => l.cat === filter);
   return (
     <section className="listings" id="listings">
       <div className="section-head"><p className="section-tag dark center">Available Properties</p><h2>Featured Opportunities</h2><p>Carefully selected homes, estates and plots across Port Harcourt and Rivers State.</p></div>
       <div className="filter-bar">
-        {cats.map((c) => (
-          <button key={c} className={`filter-pill ${filter === c ? "active" : ""}`} onClick={() => setFilter(c)}>{c} ({c === "All" ? L.length : L.filter((l) => l.cat === c).length})</button>
-        ))}
+        {cats.map((c) => (<button key={c} className={`filter-pill ${filter === c ? "active" : ""}`} onClick={() => setFilter(c)}>{c} ({c === "All" ? all.length : all.filter((l) => l.cat === c).length})</button>))}
       </div>
       <motion.div className="listing-grid" layout>
         <AnimatePresence mode="popLayout">
           {shown.map((l) => (
             <motion.div key={l.name} layout className="listing-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.92 }} whileHover={{ y: -8 }} transition={{ duration: 0.4, ease: [0.2, 0.8, 0.2, 1] }}>
               <div className="listing-media">
-                {l.img ? <Image src={l.img} alt={l.name} fill sizes="(max-width:980px) 100vw, 400px" /> : <Fallback />}
+                {l.img ? (l.img.startsWith("/") ? <Image src={l.img} alt={l.name} fill sizes="(max-width:980px) 100vw, 400px" /> : <img src={l.img} alt={l.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />) : <Fallback />}
                 <span className="listing-badge">{l.badge}</span>
                 <div className="lm-overlay"><div className="listing-name">{l.name}</div><div className="listing-loc">{l.loc}</div></div>
               </div>
